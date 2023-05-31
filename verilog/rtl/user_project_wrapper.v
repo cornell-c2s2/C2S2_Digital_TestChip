@@ -82,40 +82,33 @@ module user_project_wrapper #(
 /* User project is instantiated  here   */
 /*--------------------------------------*/
 
-user_proj_example mprj (
+FFTSPIInterconnectRTL fft_spi
+(
 `ifdef USE_POWER_PINS
-	.vccd1(vccd1),	// User area 1 1.8V power
-	.vssd1(vssd1),	// User area 1 digital ground
+    inout vccd1,	// User area 1 1.8V supply
+    inout vssd1,	// User area 1 digital ground
 `endif
-
-    .wb_clk_i(wb_clk_i),
-    .wb_rst_i(wb_rst_i),
-
-    // MGMT SoC Wishbone Slave
-
-    .wbs_cyc_i(wbs_cyc_i),
-    .wbs_stb_i(wbs_stb_i),
-    .wbs_we_i(wbs_we_i),
-    .wbs_sel_i(wbs_sel_i),
-    .wbs_adr_i(wbs_adr_i),
-    .wbs_dat_i(wbs_dat_i),
-    .wbs_ack_o(wbs_ack_o),
-    .wbs_dat_o(wbs_dat_o),
-
-    // Logic Analyzer
-
-    .la_data_in(la_data_in),
-    .la_data_out(la_data_out),
-    .la_oenb (la_oenb),
-
-    // IO Pads
-
-    .io_in (io_in),
-    .io_out(io_out),
-    .io_oeb(io_oeb),
-
-    // IRQ
-    .irq(user_irq)
+  .adapter_parity(io_out[5]) ,
+  .clk(wb_clk_i) ,
+  .minion_parity(io_out[6]) ,
+  .reset(wb_rst_i) ,
+  .minion_cs(io_in[7]) ,
+  .minion_cs_2(io_in[11]) ,
+  .minion_cs_3(io_in[15]) ,
+  .minion_miso(io_out[10]) ,
+  .minion_miso_2(io_out[14]) ,
+  .minion_miso_3(io_out[18]) ,
+  .minion_mosi(io_in[8]) ,
+  .minion_mosi_2(io_in[12]) ,
+  .minion_mosi_3(io_in[16]) ,
+  .master_cs(io_out[19]) ,
+  .master_miso(io_out[20]) ,
+  .master_mosi(io_out[21]) ,
+  .master_sclk(io_in[22]) ,
+  .minion_sclk(io_in[9]) ,
+  .minion_sclk_2(io_in[13]) ,
+  .minion_sclk_3(io_in[17]) ,
+  .io_oeb(io_oeb[22:5])
 );
 
 endmodule	// user_project_wrapper
