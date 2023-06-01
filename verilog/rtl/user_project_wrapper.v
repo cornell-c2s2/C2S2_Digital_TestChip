@@ -85,8 +85,8 @@ module user_project_wrapper #(
 FFTSPIInterconnectRTL fft_spi
 (
 `ifdef USE_POWER_PINS
-    inout vccd1,	// User area 1 1.8V supply
-    inout vssd1,	// User area 1 digital ground
+    .vccd1(vccd1),	// User area 1 1.8V supply
+    .vssd1(vssd1),	// User area 1 digital ground
 `endif
   .adapter_parity(io_out[5]) ,
   .clk(wb_clk_i) ,
