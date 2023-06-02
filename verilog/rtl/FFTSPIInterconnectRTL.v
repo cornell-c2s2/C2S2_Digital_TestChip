@@ -84,6 +84,33 @@ module vc_EnResetReg (
 		if (reset || en)
 			q <= (reset ? p_reset_value : d);
 endmodule
+module SPI_minion_components_Synchronizer (
+	clk,
+	in_,
+	negedge_,
+	out,
+	posedge_,
+	reset
+);
+	parameter reset_value = 1'b0;
+	input wire clk;
+	input wire in_;
+	output reg negedge_;
+	output wire out;
+	output reg posedge_;
+	input wire reset;
+	reg [2:0] shreg;
+	always @(*) begin
+		negedge_ = shreg[2] & ~shreg[1];
+		posedge_ = ~shreg[2] & shreg[1];
+	end
+	always @(posedge clk)
+		if (reset)
+			shreg <= {3 {reset_value}};
+		else
+			shreg <= {shreg[1:0], in_};
+	assign out = shreg[1];
+endmodule
 module SPIMasterValRdyVRTL (
 	clk,
 	reset,
@@ -148,6 +175,23 @@ module SPIMasterValRdyVRTL (
 	wire [nbits - 1:0] shreg_out_out;
 	reg freq_high_refill;
 	reg freq_low_refill;
+	wire miso_sync_clk;
+	wire miso_sync_in_;
+	wire miso_sync_negedge_;
+	wire miso_sync_out;
+	wire miso_sync_posedge_;
+	wire miso_sync_reset;
+	SPI_minion_components_Synchronizer #(.reset_value(1'b0)) miso_sync(
+		.clk(miso_sync_clk),
+		.in_(miso_sync_in_),
+		.negedge_(miso_sync_negedge_),
+		.out(miso_sync_out),
+		.posedge_(miso_sync_posedge_),
+		.reset(miso_sync_reset)
+	);
+	assign miso_sync_clk = clk;
+	assign miso_sync_reset = reset;
+	assign miso_sync_in_ = spi_ifc_miso;
 	vc_EnResetReg #(.p_nbits(logBitsN)) packet_size_reg(
 		.clk(clk),
 		.reset(reset),
@@ -316,7 +360,7 @@ module SPIMasterValRdyVRTL (
 		.reset_value(1'b0)
 	) shreg_in(
 		.clk(clk),
-		.in_(spi_ifc_miso),
+		.in_(miso_sync_out),
 		.load_data(0),
 		.load_en(0),
 		.out(shreg_in_out),
@@ -363,33 +407,6 @@ module SPI_minion_components_ShiftReg (
 			out <= load_data;
 		else if (~load_en & shift_en)
 			out <= {out[nbits - 2:0], in_};
-endmodule
-module SPI_minion_components_Synchronizer (
-	clk,
-	in_,
-	negedge_,
-	out,
-	posedge_,
-	reset
-);
-	parameter reset_value = 1'b0;
-	input wire clk;
-	input wire in_;
-	output reg negedge_;
-	output wire out;
-	output reg posedge_;
-	input wire reset;
-	reg [2:0] shreg;
-	always @(*) begin
-		negedge_ = shreg[2] & ~shreg[1];
-		posedge_ = ~shreg[2] & shreg[1];
-	end
-	always @(posedge clk)
-		if (reset)
-			shreg <= {3 {reset_value}};
-		else
-			shreg <= {shreg[1:0], in_};
-	assign out = shreg[1];
 endmodule
 module SPI_minion_components_SPIMinionVRTL (
 	clk,
@@ -892,7 +909,105 @@ module vc_Trace (
 );
 	input wire clk;
 	input wire reset;
-
+	integer len0;
+	integer len1;
+	integer idx0;
+	integer idx1;
+	localparam nchars = 512;
+	localparam nbits = 4096;
+	wire [4095:0] storage;
+	integer cycles_next = 0;
+	integer cycles = 0;
+	reg [3:0] level;
+	initial if (!$value$plusargs("trace=%d", level))
+		level = 0;
+	always @(posedge clk) cycles <= (reset ? 0 : cycles_next);
+	task append_str;
+		output reg [4095:0] trace;
+		input reg [4095:0] str;
+		begin
+			len0 = 1;
+			while (str[len0 * 8+:8] != 0) len0 = len0 + 1;
+			idx0 = trace[31:0];
+			for (idx1 = len0 - 1; idx1 >= 0; idx1 = idx1 - 1)
+				begin
+					trace[idx0 * 8+:8] = str[idx1 * 8+:8];
+					idx0 = idx0 - 1;
+				end
+			trace[31:0] = idx0;
+		end
+	endtask
+	task append_str_ljust;
+		output reg [4095:0] trace;
+		input reg [4095:0] str;
+		begin
+			idx0 = trace[31:0];
+			idx1 = nchars;
+			while (str[(idx1 * 8) - 1-:8] != 0) begin
+				trace[idx0 * 8+:8] = str[(idx1 * 8) - 1-:8];
+				idx0 = idx0 - 1;
+				idx1 = idx1 - 1;
+			end
+			trace[31:0] = idx0;
+		end
+	endtask
+	task append_chars;
+		output reg [4095:0] trace;
+		input reg [7:0] char;
+		input integer num;
+		begin
+			idx0 = trace[31:0];
+			for (idx1 = 0; idx1 < num; idx1 = idx1 + 1)
+				begin
+					trace[idx0 * 8+:8] = char;
+					idx0 = idx0 - 1;
+				end
+			trace[31:0] = idx0;
+		end
+	endtask
+	task append_val_str;
+		output reg [4095:0] trace;
+		input reg val;
+		input reg [4095:0] str;
+		begin
+			len1 = 0;
+			while (str[len1 * 8+:8] != 0) len1 = len1 + 1;
+			if (val)
+				append_str(trace, str);
+			else if (!val)
+				append_chars(trace, " ", len1);
+			else begin
+				append_str(trace, "x");
+				append_chars(trace, " ", len1 - 1);
+			end
+		end
+	endtask
+	task append_val_rdy_str;
+		output reg [4095:0] trace;
+		input reg val;
+		input reg rdy;
+		input reg [4095:0] str;
+		begin
+			len1 = 0;
+			while (str[len1 * 8+:8] != 0) len1 = len1 + 1;
+			if (val & rdy)
+				append_str(trace, str);
+			else if (rdy && !val)
+				append_chars(trace, " ", len1);
+			else if (!rdy && !val) begin
+				append_str(trace, ".");
+				append_chars(trace, " ", len1 - 1);
+			end
+			else if (!rdy && val) begin
+				append_str(trace, "#");
+				append_chars(trace, " ", len1 - 1);
+			end
+			else begin
+				append_str(trace, "x");
+				append_chars(trace, " ", len1 - 1);
+			end
+		end
+	endtask
 endmodule
 module vc_QueueCtrl1 (
 	clk,
@@ -4916,7 +5031,7 @@ module ArbitratorVRTL (
 		if (!recv_val[old_grants_index])
 			grants_index = encoder_out;
 		else
-			grants_index = grants_index;
+			grants_index = old_grants_index;
 	always @(*) begin : sv2v_autoblock_1
 		integer j;
 		for (j = 0; j < num_inputs; j = j + 1)
@@ -5026,6 +5141,14 @@ module tape_in_FFT_interconnectVRTL (
 	wire [0:1] master_cs_temp;
 	wire [(BIT_WIDTH + MAX_ADDRESSABLE_SRC_LOG2) - 1:0] arb_imm;
 	wire deserializer_reset;
+	genvar i;
+	generate
+		for (i = 10; i < MAX_ADDRESSABLE_SRCS_POW_2; i = i + 1) begin : genblk1
+			assign module_interconnect_src_rdy[i] = 0;
+			assign module_interconnect_snk_val[i] = 0;
+			assign module_interconnect_snk_msg[(15 - i) * BIT_WIDTH+:BIT_WIDTH] = 0;
+		end
+	endgenerate
 	SPIMinionAdapterConnectedVRTL #(
 		.BIT_WIDTH(BIT_WIDTH + MAX_ADDRESSABLE_SRC_LOG2),
 		.N_SAMPLES(N_SAMPLES)
@@ -5227,10 +5350,6 @@ module tape_in_FFT_interconnectVRTL (
 	);
 endmodule
 module FFTSPIInterconnectRTL (
-	`ifdef USE_POWER_PINS
-    vccd1,	// User area 1 1.8V supply
-    vssd1,	// User area 1 digital ground
-	`endif
 	adapter_parity,
 	clk,
 	minion_parity,
@@ -5250,13 +5369,8 @@ module FFTSPIInterconnectRTL (
 	master_sclk,
 	minion_sclk,
 	minion_sclk_2,
-	minion_sclk_3,
-	io_oeb
+	minion_sclk_3
 );
-	`ifdef USE_POWER_PINS
-	inout wire vccd1;
-	inout wire vssd1;
-	`endif
 	output wire [0:0] adapter_parity;
 	input wire [0:0] clk;
 	output wire [0:0] minion_parity;
@@ -5277,14 +5391,10 @@ module FFTSPIInterconnectRTL (
 	input wire [0:0] minion_sclk;
 	input wire [0:0] minion_sclk_2;
 	input wire [0:0] minion_sclk_3;
-	output wire [18:0] io_oeb;
-
-	assign io_oeb = 19'b100001110111011100;
-
 	tape_in_FFT_interconnectVRTL #(
 		.BIT_WIDTH(32),
 		.DECIMAL_PT(16),
-		.N_SAMPLES(64)
+		.N_SAMPLES(16)
 	) v(
 		.adapter_parity(adapter_parity),
 		.clk(clk),
