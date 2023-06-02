@@ -9335,7 +9335,7 @@ module FFTSPIInterconnectRTL
   #(
     .BIT_WIDTH( 32 ),
     .DECIMAL_PT( 16 ),
-    .N_SAMPLES( 16 )
+    .N_SAMPLES( 8 )
   ) v
   (
     .adapter_parity( adapter_parity ),
