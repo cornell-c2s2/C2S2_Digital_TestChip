@@ -1,0 +1,208 @@
+library (FFTSPIInterconnectRTL) {
+  comment                        : "";
+  delay_model                    : table_lookup;
+  simulation                     : false;
+  capacitive_load_unit (1,pF);
+  leakage_power_unit             : 1pW;
+  current_unit                   : "1A";
+  pulling_resistance_unit        : "1kohm";
+  time_unit                      : "1ns";
+  voltage_unit                   : "1v";
+  library_features(report_delay_calculation);
+
+  input_threshold_pct_rise : 50;
+  input_threshold_pct_fall : 50;
+  output_threshold_pct_rise : 50;
+  output_threshold_pct_fall : 50;
+  slew_lower_threshold_pct_rise : 20;
+  slew_lower_threshold_pct_fall : 20;
+  slew_upper_threshold_pct_rise : 80;
+  slew_upper_threshold_pct_fall : 80;
+  slew_derate_from_library : 1.0;
+
+
+  nom_process                    : 1.0;
+  nom_temperature                : 25.0;
+  nom_voltage                    : 1.80;
+
+  type ("io_oeb") {
+    base_type : array;
+    data_type : bit;
+    bit_width : 19;
+    bit_from : 18;
+    bit_to : 0;
+  }
+
+  cell ("FFTSPIInterconnectRTL") {
+    pin("adapter_parity") {
+      direction : output;
+      capacitance : 0.0013;
+    }
+    pin("clk") {
+      direction : input;
+      capacitance : 0.0107;
+    }
+    pin("master_cs") {
+      direction : output;
+      capacitance : 0.0012;
+    }
+    pin("master_miso") {
+      direction : input;
+      capacitance : 0.0108;
+    }
+    pin("master_mosi") {
+      direction : output;
+      capacitance : 0.0010;
+    }
+    pin("master_sclk") {
+      direction : output;
+      capacitance : 0.0010;
+    }
+    pin("minion_cs") {
+      direction : input;
+      capacitance : 0.0029;
+    }
+    pin("minion_cs_2") {
+      direction : input;
+      capacitance : 0.0105;
+    }
+    pin("minion_cs_3") {
+      direction : input;
+      capacitance : 0.0086;
+    }
+    pin("minion_miso") {
+      direction : output;
+      capacitance : 0.0009;
+    }
+    pin("minion_miso_2") {
+      direction : output;
+      capacitance : 0.0007;
+    }
+    pin("minion_miso_3") {
+      direction : output;
+      capacitance : 0.0008;
+    }
+    pin("minion_mosi") {
+      direction : input;
+      capacitance : 0.0102;
+    }
+    pin("minion_mosi_2") {
+      direction : input;
+      capacitance : 0.0109;
+    }
+    pin("minion_mosi_3") {
+      direction : input;
+      capacitance : 0.0106;
+    }
+    pin("minion_parity") {
+      direction : output;
+      capacitance : 0.0011;
+    }
+    pin("minion_sclk") {
+      direction : input;
+      capacitance : 0.0037;
+    }
+    pin("minion_sclk_2") {
+      direction : input;
+      capacitance : 0.0057;
+    }
+    pin("minion_sclk_3") {
+      direction : input;
+      capacitance : 0.0104;
+    }
+    pin("reset") {
+      direction : input;
+      capacitance : 0.0059;
+    }
+    pin("vccd1") {
+      direction : input;
+      capacitance : 0.0000;
+    }
+    pin("vssd1") {
+      direction : input;
+      capacitance : 0.0000;
+    }
+    bus("io_oeb") {
+      bus_type : io_oeb;
+      direction : output;
+      capacitance : 0.0000;
+    pin("io_oeb[18]") {
+      direction : output;
+      capacitance : 0.0007;
+    }
+    pin("io_oeb[17]") {
+      direction : output;
+      capacitance : 0.0010;
+    }
+    pin("io_oeb[16]") {
+      direction : output;
+      capacitance : 0.0009;
+    }
+    pin("io_oeb[15]") {
+      direction : output;
+      capacitance : 0.0005;
+    }
+    pin("io_oeb[14]") {
+      direction : output;
+      capacitance : 0.0011;
+    }
+    pin("io_oeb[13]") {
+      direction : output;
+      capacitance : 0.0014;
+    }
+    pin("io_oeb[12]") {
+      direction : output;
+      capacitance : 0.0010;
+    }
+    pin("io_oeb[11]") {
+      direction : output;
+      capacitance : 0.0008;
+    }
+    pin("io_oeb[10]") {
+      direction : output;
+      capacitance : 0.0008;
+    }
+    pin("io_oeb[9]") {
+      direction : output;
+      capacitance : 0.0008;
+    }
+    pin("io_oeb[8]") {
+      direction : output;
+      capacitance : 0.0013;
+    }
+    pin("io_oeb[7]") {
+      direction : output;
+      capacitance : 0.0016;
+    }
+    pin("io_oeb[6]") {
+      direction : output;
+      capacitance : 0.0007;
+    }
+    pin("io_oeb[5]") {
+      direction : output;
+      capacitance : 0.0007;
+    }
+    pin("io_oeb[4]") {
+      direction : output;
+      capacitance : 0.0007;
+    }
+    pin("io_oeb[3]") {
+      direction : output;
+      capacitance : 0.0007;
+    }
+    pin("io_oeb[2]") {
+      direction : output;
+      capacitance : 0.0006;
+    }
+    pin("io_oeb[1]") {
+      direction : output;
+      capacitance : 0.0013;
+    }
+    pin("io_oeb[0]") {
+      direction : output;
+      capacitance : 0.0011;
+    }
+    }
+  }
+
+}
