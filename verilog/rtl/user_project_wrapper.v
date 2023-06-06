@@ -82,35 +82,46 @@ module user_project_wrapper #(
 /* User project is instantiated  here   */
 /*--------------------------------------*/
 
+
+
 FFTSPIInterconnectRTL fft_spi
 (
 `ifdef USE_POWER_PINS
     .vccd1(vccd1),	// User area 1 1.8V supply
     .vssd1(vssd1),	// User area 1 digital ground
 `endif
-  .adapter_parity(io_out[5]) ,
-  .clk(wb_clk_i) ,
-  .minion_parity(io_out[6]) ,
-  .reset(wb_rst_i) ,
-  .minion_cs(io_in[7]) ,
-  .minion_cs_2(io_in[11]) ,
-  .minion_cs_3(io_in[15]) ,
-  .minion_miso(io_out[10]) ,
-  .minion_miso_2(io_out[14]) ,
-  .minion_miso_3(io_out[18]) ,
-  .minion_mosi(io_in[8]) ,
-  .minion_mosi_2(io_in[12]) ,
-  .minion_mosi_3(io_in[16]) ,
-  .master_cs(io_out[19]) ,
-  .master_miso(io_out[20]) ,
-  .master_mosi(io_out[21]) ,
-  .master_sclk(io_in[22]) ,
-  .minion_sclk(io_in[9]) ,
-  .minion_sclk_2(io_in[13]) ,
-  .minion_sclk_3(io_in[17]) ,
-  .io_oeb(io_oeb[22:5])
+  .clk            ( wb_clk_i    ),
+  .reset          ( wb_rst_i    ),
+
+  // Inputs
+
+  .minion_sclk    ( io_in[11]   ),
+  .minion_sclk_2  ( io_in[15]   ),
+  .minion_sclk_3  ( io_in[19]   ),
+  .minion_mosi    ( io_in[10]   ),
+  .minion_mosi_2  ( io_in[14]   ),
+  .minion_mosi_3  ( io_in[18]   ),
+  .minion_cs      ( io_in[9]    ),
+  .minion_cs_2    ( io_in[13]   ),
+  .minion_cs_3    ( io_in[17]   ),
+
+  .master_miso    ( io_in[22]   ),
+
+  // Outputs
+
+  .adapter_parity ( io_out[7]   ),
+  .minion_parity  ( io_out[8]   ),
+  .minion_miso    ( io_out[12]  ),
+  .minion_miso_2  ( io_out[16]  ),
+  .minion_miso_3  ( io_out[20]  ),
+  .master_cs      ( io_out[21]  ),
+  .master_mosi    ( io_out[23]  ),
+  .master_sclk    ( io_out[24]  ),
+
+  // Output Enables
+
+
+  .io_oeb         ( io_oeb[24:7] )
 );
-
-endmodule	// user_project_wrapper
-
+endmodule
 `default_nettype wire

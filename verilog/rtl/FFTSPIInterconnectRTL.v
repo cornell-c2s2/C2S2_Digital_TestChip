@@ -84,33 +84,6 @@ module vc_EnResetReg (
 		if (reset || en)
 			q <= (reset ? p_reset_value : d);
 endmodule
-module SPI_minion_components_Synchronizer (
-	clk,
-	in_,
-	negedge_,
-	out,
-	posedge_,
-	reset
-);
-	parameter reset_value = 1'b0;
-	input wire clk;
-	input wire in_;
-	output reg negedge_;
-	output wire out;
-	output reg posedge_;
-	input wire reset;
-	reg [2:0] shreg;
-	always @(*) begin
-		negedge_ = shreg[2] & ~shreg[1];
-		posedge_ = ~shreg[2] & shreg[1];
-	end
-	always @(posedge clk)
-		if (reset)
-			shreg <= {3 {reset_value}};
-		else
-			shreg <= {shreg[1:0], in_};
-	assign out = shreg[1];
-endmodule
 module SPIMasterValRdyVRTL (
 	clk,
 	reset,
@@ -407,6 +380,33 @@ module SPI_minion_components_ShiftReg (
 			out <= load_data;
 		else if (~load_en & shift_en)
 			out <= {out[nbits - 2:0], in_};
+endmodule
+module SPI_minion_components_Synchronizer (
+	clk,
+	in_,
+	negedge_,
+	out,
+	posedge_,
+	reset
+);
+	parameter reset_value = 1'b0;
+	input wire clk;
+	input wire in_;
+	output reg negedge_;
+	output wire out;
+	output reg posedge_;
+	input wire reset;
+	reg [2:0] shreg;
+	always @(*) begin
+		negedge_ = shreg[2] & ~shreg[1];
+		posedge_ = ~shreg[2] & shreg[1];
+	end
+	always @(posedge clk)
+		if (reset)
+			shreg <= {3 {reset_value}};
+		else
+			shreg <= {shreg[1:0], in_};
+	assign out = shreg[1];
 endmodule
 module SPI_minion_components_SPIMinionVRTL (
 	clk,
@@ -909,7 +909,7 @@ module vc_Trace (
 );
 	input wire clk;
 	input wire reset;
-	
+
 endmodule
 module vc_QueueCtrl1 (
 	clk,
@@ -3104,14 +3104,24 @@ module FFT_StageVRTL (
 	wire [((N_SAMPLES / 2) * BIT_WIDTH) - 1:0] twiddle_imaginary;
 	wire val_interior_mini [(N_SAMPLES / 2) - 1:0];
 	wire rdy_interior_mini [(N_SAMPLES / 2) - 1:0];
+	reg [(N_SAMPLES * BIT_WIDTH) - 1:0] recv_msg_real_fourstate;
+	reg [(N_SAMPLES * BIT_WIDTH) - 1:0] recv_msg_imag_fourstate;
+	always @(*) begin : sv2v_autoblock_1
+		reg signed [31:0] i;
+		for (i = 0; i < N_SAMPLES; i = i + 1)
+			begin
+				recv_msg_real_fourstate[i * BIT_WIDTH+:BIT_WIDTH] = recv_msg_real[i * BIT_WIDTH+:BIT_WIDTH] & {BIT_WIDTH {recv_val}};
+				recv_msg_imag_fourstate[i * BIT_WIDTH+:BIT_WIDTH] = recv_msg_imag[i * BIT_WIDTH+:BIT_WIDTH] & {BIT_WIDTH {recv_val}};
+			end
+	end
 	CombinationalFFTCrossbarVRTl #(
 		.BIT_WIDTH(BIT_WIDTH),
 		.SIZE_FFT(N_SAMPLES),
 		.STAGE_FFT(STAGE_FFT),
 		.FRONT(1)
 	) xbar_in_1(
-		.recv_real(recv_msg_real),
-		.recv_imaginary(recv_msg_imag),
+		.recv_real(recv_msg_real_fourstate),
+		.recv_imaginary(recv_msg_imag_fourstate),
 		.recv_val(val_in),
 		.recv_rdy(rdy_in),
 		.send_real(butterfly_in_real[BIT_WIDTH * ((N_SAMPLES - 1) - (N_SAMPLES - 1))+:BIT_WIDTH * N_SAMPLES]),
@@ -3208,7 +3218,7 @@ module FFTVRTL (
 	input wire reset;
 	input wire clk;
 	wire [(N_SAMPLES * BIT_WIDTH) - 1:0] real_msg [$clog2(N_SAMPLES):0];
-	reg [(N_SAMPLES * BIT_WIDTH) - 1:0] complex_msg [$clog2(N_SAMPLES):0];
+	wire [(N_SAMPLES * BIT_WIDTH) - 1:0] complex_msg [$clog2(N_SAMPLES):0];
 	wire val_in [$clog2(N_SAMPLES):0];
 	wire rdy_in [$clog2(N_SAMPLES):0];
 	wire [(N_SAMPLES * BIT_WIDTH) - 1:0] sine_wave_out;
@@ -3216,13 +3226,12 @@ module FFTVRTL (
 	assign recv_rdy = rdy_in[0];
 	assign send_val = val_in[$clog2(N_SAMPLES)];
 	assign rdy_in[$clog2(N_SAMPLES)] = send_rdy;
-	always @(*) begin : sv2v_autoblock_1
-		reg signed [31:0] i;
-		for (i = 0; i < N_SAMPLES; i = i + 1)
-			complex_msg[0][i * BIT_WIDTH+:BIT_WIDTH] = 0;
-	end
+	genvar l;
 	generate
-		if (N_SAMPLES == 512) begin : genblk1
+		for (l = 0; l < N_SAMPLES; l = l + 1) begin : genblk1
+			assign complex_msg[0][l * BIT_WIDTH+:BIT_WIDTH] = {BIT_WIDTH {1'b0}};
+		end
+		if (N_SAMPLES == 512) begin : genblk2
 			assign real_msg[0][0+:BIT_WIDTH] = recv_msg[0+:BIT_WIDTH];
 			assign real_msg[0][256 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[BIT_WIDTH+:BIT_WIDTH];
 			assign real_msg[0][128 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[2 * BIT_WIDTH+:BIT_WIDTH];
@@ -3737,7 +3746,7 @@ module FFTVRTL (
 			assign real_msg[0][511 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[511 * BIT_WIDTH+:BIT_WIDTH];
 			SineWave__BIT_WIDTH_32__DECIMAL_POINT_16__SIZE_FFT_512VRTL SineWave(.sine_wave_out(sine_wave_out));
 		end
-		else if (N_SAMPLES == 256) begin : genblk1
+		else if (N_SAMPLES == 256) begin : genblk2
 			assign real_msg[0][0+:BIT_WIDTH] = recv_msg[0+:BIT_WIDTH];
 			assign real_msg[0][128 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[BIT_WIDTH+:BIT_WIDTH];
 			assign real_msg[0][64 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[2 * BIT_WIDTH+:BIT_WIDTH];
@@ -3996,7 +4005,7 @@ module FFTVRTL (
 			assign real_msg[0][255 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[255 * BIT_WIDTH+:BIT_WIDTH];
 			SineWave__BIT_WIDTH_32__DECIMAL_POINT_16__SIZE_FFT_256VRTL SineWave(.sine_wave_out(sine_wave_out));
 		end
-		else if (N_SAMPLES == 128) begin : genblk1
+		else if (N_SAMPLES == 128) begin : genblk2
 			assign real_msg[0][0+:BIT_WIDTH] = recv_msg[0+:BIT_WIDTH];
 			assign real_msg[0][64 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[BIT_WIDTH+:BIT_WIDTH];
 			assign real_msg[0][32 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[2 * BIT_WIDTH+:BIT_WIDTH];
@@ -4127,7 +4136,7 @@ module FFTVRTL (
 			assign real_msg[0][127 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[127 * BIT_WIDTH+:BIT_WIDTH];
 			SineWave__BIT_WIDTH_32__DECIMAL_POINT_16__SIZE_FFT_128VRTL SineWave(.sine_wave_out(sine_wave_out));
 		end
-		else if (N_SAMPLES == 64) begin : genblk1
+		else if (N_SAMPLES == 64) begin : genblk2
 			assign real_msg[0][0+:BIT_WIDTH] = recv_msg[0+:BIT_WIDTH];
 			assign real_msg[0][32 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[BIT_WIDTH+:BIT_WIDTH];
 			assign real_msg[0][16 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[2 * BIT_WIDTH+:BIT_WIDTH];
@@ -4194,7 +4203,7 @@ module FFTVRTL (
 			assign real_msg[0][63 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[63 * BIT_WIDTH+:BIT_WIDTH];
 			SineWave__BIT_WIDTH_32__DECIMAL_POINT_16__SIZE_FFT_64VRTL SineWave(.sine_wave_out(sine_wave_out));
 		end
-		else if (N_SAMPLES == 32) begin : genblk1
+		else if (N_SAMPLES == 32) begin : genblk2
 			assign real_msg[0][0+:BIT_WIDTH] = recv_msg[0+:BIT_WIDTH];
 			assign real_msg[0][16 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[BIT_WIDTH+:BIT_WIDTH];
 			assign real_msg[0][8 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[2 * BIT_WIDTH+:BIT_WIDTH];
@@ -4229,7 +4238,7 @@ module FFTVRTL (
 			assign real_msg[0][31 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[31 * BIT_WIDTH+:BIT_WIDTH];
 			SineWave__BIT_WIDTH_32__DECIMAL_POINT_16__SIZE_FFT_32VRTL SineWave(.sine_wave_out(sine_wave_out));
 		end
-		else if (N_SAMPLES == 16) begin : genblk1
+		else if (N_SAMPLES == 16) begin : genblk2
 			assign real_msg[0][0+:BIT_WIDTH] = recv_msg[0+:BIT_WIDTH];
 			assign real_msg[0][8 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[BIT_WIDTH+:BIT_WIDTH];
 			assign real_msg[0][4 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[2 * BIT_WIDTH+:BIT_WIDTH];
@@ -4248,7 +4257,7 @@ module FFTVRTL (
 			assign real_msg[0][15 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[15 * BIT_WIDTH+:BIT_WIDTH];
 			SineWave__BIT_WIDTH_32__DECIMAL_POINT_16__SIZE_FFT_16VRTL SineWave(.sine_wave_out(sine_wave_out));
 		end
-		else if (N_SAMPLES == 8) begin : genblk1
+		else if (N_SAMPLES == 8) begin : genblk2
 			assign real_msg[0][0+:BIT_WIDTH] = recv_msg[0+:BIT_WIDTH];
 			assign real_msg[0][4 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[BIT_WIDTH+:BIT_WIDTH];
 			assign real_msg[0][2 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[2 * BIT_WIDTH+:BIT_WIDTH];
@@ -4259,14 +4268,14 @@ module FFTVRTL (
 			assign real_msg[0][7 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[7 * BIT_WIDTH+:BIT_WIDTH];
 			SineWave__BIT_WIDTH_32__DECIMAL_POINT_16__SIZE_FFT_8VRTL SineWave(.sine_wave_out(sine_wave_out));
 		end
-		else if (N_SAMPLES == 4) begin : genblk1
+		else if (N_SAMPLES == 4) begin : genblk2
 			assign real_msg[0][0+:BIT_WIDTH] = recv_msg[0+:BIT_WIDTH];
 			assign real_msg[0][2 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[BIT_WIDTH+:BIT_WIDTH];
 			assign real_msg[0][BIT_WIDTH+:BIT_WIDTH] = recv_msg[2 * BIT_WIDTH+:BIT_WIDTH];
 			assign real_msg[0][3 * BIT_WIDTH+:BIT_WIDTH] = recv_msg[3 * BIT_WIDTH+:BIT_WIDTH];
 			SineWave__BIT_WIDTH_32__DECIMAL_POINT_16__SIZE_FFT_4VRTL SineWave(.sine_wave_out(sine_wave_out));
 		end
-		else if (N_SAMPLES == 2) begin : genblk1
+		else if (N_SAMPLES == 2) begin : genblk2
 			assign real_msg[0][0+:BIT_WIDTH] = recv_msg[0+:BIT_WIDTH];
 			assign real_msg[0][BIT_WIDTH+:BIT_WIDTH] = recv_msg[BIT_WIDTH+:BIT_WIDTH];
 			SineWave__BIT_WIDTH_32__DECIMAL_POINT_16__SIZE_FFT_2VRTL SineWave(.sine_wave_out(sine_wave_out));
@@ -4275,9 +4284,7 @@ module FFTVRTL (
 	genvar i;
 	genvar b;
 	generate
-		for (i = 0; i < $clog2(N_SAMPLES); i = i + 1) begin : genblk2
-			wire [N_SAMPLES * BIT_WIDTH:1] sv2v_tmp_fft_stage_send_msg_imag;
-			always @(*) complex_msg[i + 1] = sv2v_tmp_fft_stage_send_msg_imag;
+		for (i = 0; i < $clog2(N_SAMPLES); i = i + 1) begin : genblk3
 			FFT_StageVRTL #(
 				.BIT_WIDTH(BIT_WIDTH),
 				.DECIMAL_PT(DECIMAL_PT),
@@ -4289,7 +4296,7 @@ module FFTVRTL (
 				.recv_val(val_in[i]),
 				.recv_rdy(rdy_in[i]),
 				.send_msg_real(real_msg[i + 1]),
-				.send_msg_imag(sv2v_tmp_fft_stage_send_msg_imag),
+				.send_msg_imag(complex_msg[i + 1]),
 				.send_val(val_in[i + 1]),
 				.send_rdy(rdy_in[i + 1]),
 				.sine_wave_out(sine_wave_out),
@@ -4298,7 +4305,7 @@ module FFTVRTL (
 			);
 		end
 	endgenerate
-	always @(*) begin : sv2v_autoblock_2
+	always @(*) begin : sv2v_autoblock_1
 		reg signed [31:0] i;
 		for (i = 0; i < N_SAMPLES; i = i + 1)
 			send_msg[i * BIT_WIDTH+:BIT_WIDTH] = real_msg[$clog2(N_SAMPLES)][i * BIT_WIDTH+:BIT_WIDTH];
@@ -5007,6 +5014,8 @@ module tape_in_FFT_interconnectVRTL (
 	wire spi_minion_send_val;
 	wire spi_minion_send_rdy;
 	wire [(BIT_WIDTH + MAX_ADDRESSABLE_SRC_LOG2) - 1:0] spi_minion_send_msg;
+	wire [(BIT_WIDTH + MAX_ADDRESSABLE_SRC_LOG2) - 1:0] spi_minion_send_msg_fourstate;
+	assign spi_minion_send_msg = spi_minion_send_msg_fourstate & {BIT_WIDTH + MAX_ADDRESSABLE_SRC_LOG2 {spi_minion_send_val}};
 	wire spi_minion_recv_val;
 	wire spi_minion_recv_rdy;
 	wire [(BIT_WIDTH + MAX_ADDRESSABLE_SRC_LOG2) - 1:0] spi_minion_recv_msg;
@@ -5019,6 +5028,8 @@ module tape_in_FFT_interconnectVRTL (
 	wire spi_master_send_val;
 	wire spi_master_send_rdy;
 	wire [BIT_WIDTH - 1:0] spi_master_send_msg;
+	wire [BIT_WIDTH - 1:0] spi_master_send_msg_fourstate;
+	assign spi_master_send_msg = spi_master_send_msg_fourstate & {BIT_WIDTH {spi_master_send_val}};
 	wire spi_master_recv_val;
 	wire spi_master_recv_rdy;
 	wire [BIT_WIDTH - 1:0] spi_master_recv_msg;
@@ -5043,14 +5054,6 @@ module tape_in_FFT_interconnectVRTL (
 	wire [0:1] master_cs_temp;
 	wire [(BIT_WIDTH + MAX_ADDRESSABLE_SRC_LOG2) - 1:0] arb_imm;
 	wire deserializer_reset;
-	genvar i;
-	generate
-		for (i = 10; i < MAX_ADDRESSABLE_SRCS_POW_2; i = i + 1) begin : genblk1
-			assign module_interconnect_src_rdy[i] = 0;
-			assign module_interconnect_snk_val[i] = 0;
-			assign module_interconnect_snk_msg[(15 - i) * BIT_WIDTH+:BIT_WIDTH] = 0;
-		end
-	endgenerate
 	SPIMinionAdapterConnectedVRTL #(
 		.BIT_WIDTH(BIT_WIDTH + MAX_ADDRESSABLE_SRC_LOG2),
 		.N_SAMPLES(N_SAMPLES)
@@ -5064,7 +5067,7 @@ module tape_in_FFT_interconnectVRTL (
 		.recv_msg(spi_minion_recv_msg),
 		.recv_rdy(spi_minion_recv_rdy),
 		.recv_val(spi_minion_recv_val),
-		.send_msg(spi_minion_send_msg),
+		.send_msg(spi_minion_send_msg_fourstate),
 		.send_rdy(spi_minion_send_rdy),
 		.send_val(spi_minion_send_val),
 		.minion_parity(minion_parity),
@@ -5181,7 +5184,7 @@ module tape_in_FFT_interconnectVRTL (
 		.recv_msg(spi_master_recv_msg),
 		.send_val(spi_master_send_val),
 		.send_rdy(spi_master_send_rdy),
-		.send_msg(spi_master_send_msg),
+		.send_msg(spi_master_send_msg_fourstate),
 		.packet_size_ifc_val(module_interconnect_src_val[5]),
 		.packet_size_ifc_rdy(module_interconnect_src_rdy[5]),
 		.packet_size_ifc_msg({1'b0, module_interconnect_src_msg[(10 * BIT_WIDTH) + ((BIT_WIDTH - 1) >= (BIT_WIDTH - 6) ? BIT_WIDTH - 1 : ((BIT_WIDTH - 1) + ((BIT_WIDTH - 1) >= (BIT_WIDTH - 6) ? ((BIT_WIDTH - 1) - (BIT_WIDTH - 6)) + 1 : ((BIT_WIDTH - 6) - (BIT_WIDTH - 1)) + 1)) - 1)-:((BIT_WIDTH - 1) >= (BIT_WIDTH - 6) ? ((BIT_WIDTH - 1) - (BIT_WIDTH - 6)) + 1 : ((BIT_WIDTH - 6) - (BIT_WIDTH - 1)) + 1)]}),
@@ -5252,60 +5255,39 @@ module tape_in_FFT_interconnectVRTL (
 	);
 endmodule
 module FFTSPIInterconnectRTL (
-	adapter_parity,
-	clk,
-	minion_parity,
-	reset,
-	minion_cs,
-	minion_cs_2,
-	minion_cs_3,
-	minion_miso,
-	minion_miso_2,
-	minion_miso_3,
-	minion_mosi,
-	minion_mosi_2,
-	minion_mosi_3,
-	master_cs,
-	master_miso,
-	master_mosi,
-	master_sclk,
-	minion_sclk,
-	minion_sclk_2,
-	minion_sclk_3,
-	io_oeb,
-  	`ifdef USE_POWER_PINS
+	`ifdef USE_POWER_PINS
     inout vccd1,	// User area 1 1.8V supply
-    inout vssd1	// User area 1 digital ground
+    inout vssd1,	// User area 1 digital ground
 	`endif
+	output adapter_parity,
+	input  clk,
+	output minion_parity,
+	input  reset,
+	input  minion_cs,
+	input  minion_cs_2,
+	input  minion_cs_3,
+	output minion_miso,
+	output minion_miso_2,
+	output minion_miso_3,
+	input  minion_mosi,
+	input  minion_mosi_2,
+	input  minion_mosi_3,
+	output master_cs,
+	input  master_miso,
+	output master_mosi,
+	output master_sclk,
+	input  minion_sclk,
+	input  minion_sclk_2,
+	input  minion_sclk_3,
+	output [ 17:0 ] io_oeb
 	
 );
-	output wire [0:0] adapter_parity;
-	input wire [0:0] clk;
-	output wire [0:0] minion_parity;
-	input wire [0:0] reset;
-	input wire [0:0] minion_cs;
-	input wire [0:0] minion_cs_2;
-	input wire [0:0] minion_cs_3;
-	output wire [0:0] minion_miso;
-	output wire [0:0] minion_miso_2;
-	output wire [0:0] minion_miso_3;
-	input wire [0:0] minion_mosi;
-	input wire [0:0] minion_mosi_2;
-	input wire [0:0] minion_mosi_3;
-	output wire [0:0] master_cs;
-	input wire [0:0] master_miso;
-	output wire [0:0] master_mosi;
-	output wire [0:0] master_sclk;
-	input wire [0:0] minion_sclk;
-	input wire [0:0] minion_sclk_2;
-	input wire [0:0] minion_sclk_3;
-	output wire [18:0] io_oeb;
 
-	assign io_oeb = 19'b100001110111011100;
+	assign io_oeb = 18'b001001110111011100;
 	tape_in_FFT_interconnectVRTL #(
 		.BIT_WIDTH(32),
 		.DECIMAL_PT(16),
-		.N_SAMPLES(4)
+		.N_SAMPLES(32)
 	) v(
 		.adapter_parity(adapter_parity),
 		.clk(clk),
